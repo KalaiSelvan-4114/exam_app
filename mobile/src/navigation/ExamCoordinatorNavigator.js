@@ -8,7 +8,7 @@ import CreateExamScreen from '../screens/exam_coordinator/CreateExamScreen';
 import ManageExamsScreen from '../screens/exam_coordinator/ManageExamsScreen';
 import AddUserScreen from '../screens/exam_coordinator/AddUserScreen';
 import ReportsScreen from '../screens/exam_coordinator/ReportsScreen';
-import HallAllocationScreen from '../screens/exam_coordinator/HallAllocationScreen';
+// import HallAllocationScreen from '../screens/exam_coordinator/HallAllocationScreen';
 import SessionAssignmentScreen from '../screens/exam_coordinator/SessionAssignmentScreen';
 import ProfileScreen from '../screens/common/ProfileScreen';
 
@@ -41,15 +41,6 @@ export default function ExamCoordinatorNavigator() {
           headerShown: false,
           tabBarIcon: ({ color }) => (
             <MaterialCommunityIcons name="clipboard-list" size={24} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Hall Allocation"
-        component={HallAllocationScreen}
-        options={{
-          tabBarIcon: ({ color }) => (
-            <MaterialCommunityIcons name="office-building" size={24} color={color} />
           ),
         }}
       />

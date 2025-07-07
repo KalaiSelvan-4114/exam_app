@@ -144,16 +144,6 @@ const ViewExamScreen = () => {
             </Button>
             <Button
               mode="contained"
-              onPress={() => navigation.navigate('HallAllocation', { examId: exam.id })}
-              style={styles.button}
-              contentStyle={styles.buttonContent}
-              labelStyle={styles.buttonLabel}
-              icon="office-building"
-            >
-              Manage Halls
-            </Button>
-            <Button
-              mode="contained"
               onPress={() => navigation.navigate('AssignStaff', { examId: exam.id })}
               style={styles.button}
               contentStyle={styles.buttonContent}

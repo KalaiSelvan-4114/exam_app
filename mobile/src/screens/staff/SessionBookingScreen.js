@@ -16,6 +16,7 @@ const SessionBookingScreen = () => {
   const [loading, setLoading] = useState(true);
   const [booking, setBooking] = useState(false);
   const [error, setError] = useState(null);
+  const [sessions, setSessions] = useState([]);
 
   useEffect(() => {
     fetchData();
@@ -25,44 +26,38 @@ const SessionBookingScreen = () => {
     try {
       setLoading(true);
       setError(null);
-      // Fetch all exams (like All Exams page)
-      let allExams = [];
+      let availableSessions = [];
       let myBookings = [];
       try {
-        allExams = await examAPI.getExams();
-        console.log('Fetched exams:', allExams);
-      } catch (examErr) {
-        console.log('Error fetching exams:', examErr);
-        setError('Failed to fetch exams.');
+        availableSessions = await staffAPI.getAvailableSessions();
+      } catch (sessionErr) {
+        setError('Failed to fetch available sessions.');
         setLoading(false);
         return;
       }
       try {
         myBookings = await staffAPI.getMyBookedSessions();
-        console.log('Fetched bookings:', myBookings);
       } catch (bookingErr) {
-        console.log('Error fetching bookings:', bookingErr);
         setError('Failed to fetch your bookings.');
         setLoading(false);
         return;
       }
-      setExams(allExams);
+      setSessions(availableSessions);
       setBookings(myBookings);
     } catch (err) {
       setError('Unknown error fetching sessions.');
-      console.log('Unknown fetch error:', err);
       Alert.alert('Error', 'Unknown error fetching sessions.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleBookSession = async (exam) => {
+  const handleBookSession = async (session) => {
     try {
       setBooking(true);
-      await staffAPI.bookSession(exam.date, exam.timeSlot);
+      await staffAPI.bookSession(session.date, session.timeSlot);
       Alert.alert('Success', 'Session booked successfully!');
-      fetchData(); // Refresh the list
+      fetchData();
     } catch (err) {
       Alert.alert('Error', err.message || 'Failed to book session');
     } finally {
@@ -102,14 +97,6 @@ const SessionBookingScreen = () => {
     );
   };
 
-  // Group exams by date for display
-  const groupedExams = exams.reduce((acc, exam) => {
-    const dateKey = new Date(exam.date).toISOString().split('T')[0];
-    if (!acc[dateKey]) acc[dateKey] = [];
-    acc[dateKey].push(exam);
-    return acc;
-  }, {});
-
   if (loading) {
     return (
       <LinearGradient
@@ -145,64 +132,37 @@ const SessionBookingScreen = () => {
             <Text style={styles.errorText}>{error}</Text>
           )}
 
-          {Object.entries(groupedExams).map(([date, examsOnDate]) => (
-            <Card key={date} style={styles.dateCard}>
+          {sessions.length === 0 && (
+            <Text style={styles.errorText}>No available sessions to book.</Text>
+          )}
+
+          {sessions.map((session, idx) => (
+            <Card key={idx} style={styles.dateCard}>
               <Card.Content>
-                <Text style={styles.dateTitle}>
-                  {new Date(date).toLocaleDateString('en-US', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                  })}
-                </Text>
-                {examsOnDate.map((exam, index) => {
-                  const booking = findBooking(exam);
-                  return (
-                    <View key={index} style={styles.sessionContainer}>
-                      <View style={styles.sessionInfo}>
-                        <Text style={styles.sessionTime}>{exam.timeSlot === 'FN' ? 'Morning (FN)' : 'Afternoon (AN)'}</Text>
-                        <Text style={styles.examTitle}>{exam.title}</Text>
-                        <Chip
-                          mode="outlined"
-                          style={[
-                            styles.statusChip,
-                            booking && styles.bookedChip
-                          ]}
-                        >
-                          {booking ? 'Booked' : 'Available'}
-                        </Chip>
-                      </View>
-                      {booking ? (
-                        <Button
-                          mode="outlined"
-                          onPress={() => handleCancelSession(booking._id)}
-                          style={styles.cancelButton}
-                          textColor="#d32f2f"
-                        >
-                          Cancel
-                        </Button>
-                      ) : (
-                        <Button
-                          mode="contained"
-                          onPress={() => handleBookSession(exam)}
-                          loading={booking}
-                          disabled={booking}
-                          style={styles.bookButton}
-                        >
-                          Book Session
-                        </Button>
-                      )}
-                    </View>
-                  );
-                })}
+                <Text style={styles.dateTitle}>{session.displayDate}</Text>
+                <View style={styles.sessionContainer}>
+                  <View style={styles.sessionInfo}>
+                    <Text style={styles.sessionTime}>{session.displayTime}</Text>
+                    <Chip
+                      mode="outlined"
+                      style={styles.statusChip}
+                    >
+                      {session.status === 'full' ? 'Full' : 'Available'}
+                    </Chip>
+                    <Text style={{fontSize:12, color:'#555'}}>Booked: {session.staffCount} / {session.hallCount}</Text>
+                  </View>
+                  <Button
+                    mode="contained"
+                    onPress={() => handleBookSession(session)}
+                    disabled={session.status === 'full' || booking}
+                    style={styles.bookButton}
+                  >
+                    Book Session
+                  </Button>
+                </View>
               </Card.Content>
             </Card>
           ))}
-
-          {exams.length === 0 && !loading && !error && (
-            <Text style={styles.emptyText}>No available sessions found.</Text>
-          )}
         </ScrollView>
       </View>
     </LinearGradient>
@@ -280,31 +240,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
   },
-  examTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-  },
   statusChip: {
     backgroundColor: '#e8f5e8',
-  },
-  bookedChip: {
-    backgroundColor: '#fff3e0',
   },
   bookButton: {
     marginLeft: 12,
     borderRadius: 8,
-  },
-  cancelButton: {
-    marginLeft: 12,
-    borderRadius: 8,
-    borderColor: '#d32f2f',
-  },
-  emptyText: {
-    textAlign: 'center',
-    fontSize: 16,
-    color: '#666',
-    fontStyle: 'italic',
   },
 });
 

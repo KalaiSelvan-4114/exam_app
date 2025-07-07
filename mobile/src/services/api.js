@@ -302,4 +302,20 @@ export const staffAPI = {
         });
         return handleResponse(res);
     },
+};
+
+// Add auto-assign API for exam coordinator
+export const sessionBookingAPI = {
+    autoAssign: async (date, timeSlot) => {
+        const res = await fetch(`${API_URL}/session-bookings/auto-assign`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: await AsyncStorage.getItem('token'),
+            },
+            body: JSON.stringify({ date, timeSlot }),
+        });
+        if (!res.ok) throw new Error('Failed to auto-assign sessions');
+        return res.json();
+    },
 }; 

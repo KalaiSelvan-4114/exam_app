@@ -1,6 +1,7 @@
 const SessionBooking = require('../../models/SessionBooking');
 const User = require('../../models/User');
 const Exam = require('../../models/Exam');
+const Hall = require('../../models/Hall');
 
 // Get available sessions for staff to book
 exports.getAvailableSessions = async (req, res) => {
@@ -14,6 +15,25 @@ exports.getAvailableSessions = async (req, res) => {
       const sessionDate = new Date(exam.date);
       const dateStr = sessionDate.toISOString().split('T')[0];
       sessionSet.add(`${dateStr}|${exam.timeSlot}`);
+    });
+
+    // Get all session bookings (to count staff per session)
+    const allBookings = await SessionBooking.find();
+
+    // Group bookings by date and timeSlot
+    const bookingCountMap = {};
+    allBookings.forEach(booking => {
+      const dateStr = new Date(booking.date).toISOString().split('T')[0];
+      const key = `${dateStr}|${booking.timeSlot}`;
+      bookingCountMap[key] = (bookingCountMap[key] || 0) + 1;
+    });
+
+    // For each session, count number of halls (from all exams on that date/session)
+    const hallsMap = {};
+    exams.forEach(exam => {
+      const dateStr = new Date(exam.date).toISOString().split('T')[0];
+      const key = `${dateStr}|${exam.timeSlot}`;
+      hallsMap[key] = (hallsMap[key] || 0) + (exam.halls ? exam.halls.length : 0);
     });
 
     // Get staff's existing bookings
@@ -30,6 +50,9 @@ exports.getAvailableSessions = async (req, res) => {
       const isBooked = bookedSessions.some(booked =>
         booked.date === dateStr && booked.timeSlot === timeSlot
       );
+      const staffCount = bookingCountMap[key] || 0;
+      const hallCount = hallsMap[key] || 0;
+      const isFull = staffCount >= hallCount && hallCount > 0;
       return {
         date: sessionDate,
         timeSlot,
@@ -41,9 +64,11 @@ exports.getAvailableSessions = async (req, res) => {
         }),
         displayTime: timeSlot === 'FN' ? 'Morning (FN)' : 'Afternoon (AN)',
         isBooked,
-        status: isBooked ? 'booked' : 'available',
+        status: isBooked ? 'booked' : isFull ? 'full' : 'available',
+        staffCount,
+        hallCount
       };
-    });
+    }).filter(session => !session.isBooked && session.status !== 'full');
 
     res.json(availableSessions);
   } catch (error) {
@@ -185,5 +210,84 @@ exports.assignExamToSession = async (req, res) => {
   } catch (error) {
     console.error('Error assigning exam to session:', error);
     res.status(500).json({ message: 'Error assigning exam to session' });
+  }
+};
+
+// Auto-assign staff to halls and exams for a session
+exports.autoAssignSession = async (req, res) => {
+  try {
+    const { date, timeSlot } = req.body;
+    if (!date || !timeSlot) {
+      return res.status(400).json({ message: 'Date and timeSlot are required' });
+    }
+
+    // Use date range for the whole day
+    const start = new Date(date);
+    start.setHours(0,0,0,0);
+    const end = new Date(date);
+    end.setHours(23,59,59,999);
+
+    // Find all unassigned bookings for this session
+    const unassignedBookings = await SessionBooking.find({
+      date: { $gte: start, $lte: end },
+      timeSlot,
+      status: 'booked',
+      assignedExamId: null,
+      assignedHallId: null
+    });
+    console.log('Unassigned bookings:', unassignedBookings.length, unassignedBookings.map(b => b._id));
+
+    if (unassignedBookings.length === 0) {
+      console.log('No unassigned bookings for this session.');
+      return res.json({ message: 'No unassigned bookings for this session.' });
+    }
+
+    // Find all exams for this date/session
+    const exams = await Exam.find({ date: { $gte: start, $lte: end }, timeSlot });
+    console.log('Exams found:', exams.length, exams.map(e => e._id));
+    // Build a list of all halls for these exams
+    let halls = [];
+    exams.forEach(exam => {
+      if (exam.halls && exam.halls.length > 0) {
+        exam.halls.forEach(hall => {
+          halls.push({
+            examId: exam._id,
+            hallId: hall._id,
+            hallNumber: hall.hallNumber
+          });
+        });
+      }
+    });
+    console.log('Total halls found:', halls.length, halls.map(h => h.hallId));
+
+    // Find already assigned halls for this session
+    const assignedBookings = await SessionBooking.find({
+      date: { $gte: start, $lte: end },
+      timeSlot,
+      assignedHallId: { $ne: null }
+    });
+    const assignedHallIds = assignedBookings.map(b => String(b.assignedHallId));
+    console.log('Already assigned hall IDs:', assignedHallIds);
+    // Filter out already assigned halls
+    const availableHalls = halls.filter(h => !assignedHallIds.includes(String(h.hallId)));
+    console.log('Available halls for assignment:', availableHalls.length, availableHalls.map(h => h.hallId));
+
+    // Round-robin assign staff to available halls/exams
+    let updatedCount = 0;
+    for (let i = 0; i < unassignedBookings.length && i < availableHalls.length; i++) {
+      const booking = unassignedBookings[i];
+      const hall = availableHalls[i];
+      booking.assignedExamId = hall.examId;
+      booking.assignedHallId = hall.hallId;
+      booking.status = 'assigned';
+      await booking.save();
+      updatedCount++;
+      console.log(`Assigned booking ${booking._id} to exam ${hall.examId}, hall ${hall.hallId}`);
+    }
+
+    res.json({ message: `Auto-assigned ${updatedCount} staff to halls/exams for this session.` });
+  } catch (error) {
+    console.error('Error in auto-assign:', error);
+    res.status(500).json({ message: 'Error auto-assigning staff to session.' });
   }
 }; 

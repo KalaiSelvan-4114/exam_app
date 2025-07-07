@@ -21,4 +21,7 @@ router.get('/all', authenticateToken, sessionBookingController.getAllBookedSessi
 // Assign exam to booked session (for exam coordinator)
 router.post('/:bookingId/assign-exam', authenticateToken, sessionBookingController.assignExamToSession);
 
+// Add auto-assign endpoint
+router.post('/auto-assign', authenticateToken, sessionBookingController.autoAssignSession);
+
 module.exports = router; 

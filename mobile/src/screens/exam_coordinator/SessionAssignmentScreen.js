@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { Card, Button, Text, Chip, Surface, DataTable, Portal, Modal, TextInput } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
-import { examAPI, hallAPI } from '../../services/api';
+import { examAPI, hallAPI, sessionBookingAPI } from '../../services/api';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const SessionAssignmentScreen = () => {
@@ -22,6 +22,8 @@ const SessionAssignmentScreen = () => {
   const [selectedSession, setSelectedSession] = useState(null);
   const [selectedExam, setSelectedExam] = useState('');
   const [selectedHall, setSelectedHall] = useState('');
+  const [autoAssigning, setAutoAssigning] = useState(false);
+  const [selectedAutoAssignSession, setSelectedAutoAssignSession] = useState(null);
 
   useEffect(() => {
     fetchData();
@@ -50,8 +52,6 @@ const SessionAssignmentScreen = () => {
       setLoading(false);
     }
   };
-
-
 
   const handleAssignExam = async () => {
     if (!selectedExam || !selectedHall) {
@@ -94,6 +94,28 @@ const SessionAssignmentScreen = () => {
         return '#e3f2fd';
       default:
         return '#f5f5f5';
+    }
+  };
+
+  // Helper to get unique sessions (date + timeSlot)
+  const uniqueSessions = Array.from(
+    new Set(bookedSessions.map(s => `${s.date}|${s.timeSlot}`))
+  ).map(key => {
+    const [date, timeSlot] = key.split('|');
+    return { date, timeSlot };
+  });
+
+  const handleAutoAssign = async (date, timeSlot) => {
+    try {
+      console.log('Auto-assign payload:', { date, timeSlot });
+      setAutoAssigning(true);
+      await sessionBookingAPI.autoAssign(date, timeSlot);
+      Alert.alert('Success', 'Auto-assignment completed!');
+      fetchData();
+    } catch (err) {
+      Alert.alert('Error', err.message || 'Failed to auto-assign');
+    } finally {
+      setAutoAssigning(false);
     }
   };
 
@@ -208,6 +230,24 @@ const SessionAssignmentScreen = () => {
               </Card.Content>
             </Card>
           )}
+
+          {/* Auto-Assign buttons for each unique session */}
+          {uniqueSessions.map((session, idx) => (
+            <Button
+              key={idx}
+              mode="contained"
+              style={{ marginVertical: 8, backgroundColor: '#1976D2' }}
+              loading={autoAssigning && selectedAutoAssignSession === idx}
+              disabled={autoAssigning}
+              onPress={async () => {
+                setSelectedAutoAssignSession(idx);
+                await handleAutoAssign(session.date, session.timeSlot);
+                setSelectedAutoAssignSession(null);
+              }}
+            >
+              Auto-Assign for {new Date(session.date).toLocaleDateString()} ({session.timeSlot})
+            </Button>
+          ))}
         </ScrollView>
 
         <Portal>
