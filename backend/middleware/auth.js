@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 
 module.exports = (req, res, next) => {
     console.log('Auth middleware: Processing request');
+    console.log('Auth middleware: Headers:', req.headers);
     
     // Get token from header
     const token = req.header('Authorization')?.replace('Bearer ', '');
@@ -22,12 +23,25 @@ module.exports = (req, res, next) => {
         
         // Add user from payload
         req.user = {
-            userId: decoded.userId,
-            role: decoded.role
+            _id: decoded.userId,
+            role: decoded.role,
+            department: decoded.department
         };
         next();
     } catch (error) {
         console.error('Auth middleware: Token verification failed:', error);
         res.status(401).json({ message: 'Token is not valid' });
     }
-}; 
+};
+
+// Middleware to authorize roles
+const authorizeRoles = (allowedRoles) => {
+    return (req, res, next) => {
+        if (!req.user || !allowedRoles.includes(req.user.role)) {
+            return res.status(403).json({ message: 'Access denied' });
+        }
+        next();
+    };
+};
+
+module.exports = { authenticateToken: module.exports, authorizeRoles }; 

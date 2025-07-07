@@ -1,3 +1,38 @@
-node_modules
+# Node modules
+node_modules/
+
+# Environment files
 .env
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Expo
+.expo/
+.expo-shared/
+web-build/
+
+# React Native
+ios/
+android/
+build/
+
+# Metro
+metro-cache/
+
+# Misc
+*.log
+*.tmp
+*.swp
+
+# VSCode
+.vscode/
+
+# Mac
+.DS_Store
+
+# Windows
+Thumbs.db
 

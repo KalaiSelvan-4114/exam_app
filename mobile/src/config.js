@@ -1,0 +1,1 @@
+export const API_URL = 'http://192.168.40.185:5000'; // Change this to your backend URL 

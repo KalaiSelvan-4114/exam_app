@@ -1,134 +1,305 @@
-import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'http://169.254.251.0:5000/api'; // Your computer's IP address
+const API_URL = 'http://192.168.40.185:5000/api'; // Your computer's IP address
 
-// Create axios instance with base configuration
-const api = axios.create({
-    baseURL: API_URL,
-    headers: {
-        'Content-Type': 'application/json',
-    },
-});
+// Helper function to get auth token
+const getAuthHeaders = async () => {
+    const token = await AsyncStorage.getItem('token');
+    console.log('API Service: Retrieved token:', token ? 'Token exists' : 'No token found');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
-// Request interceptor to add authorization token
-api.interceptors.request.use(
-    async (config) => {
-        try {
-            const token = await AsyncStorage.getItem('token');
-            if (token) {
-                config.headers.Authorization = `Bearer ${token}`;
-            }
-            return config;
-        } catch (error) {
-            console.error('Error adding token to request:', error);
-            return config;
+const handleResponse = async (response) => {
+    const data = await response.json();
+    if (!response.ok) {
+        if (response.status === 401) {
+            await AsyncStorage.removeItem('token');
         }
-    },
-    (error) => {
-        return Promise.reject(error);
+        const error = new Error(data.message || 'API Error');
+        error.status = response.status;
+        error.data = data;
+        throw error;
     }
-);
-
-// Response interceptor to handle common errors
-api.interceptors.response.use(
-    (response) => response,  // Return the full response instead of just data
-    (error) => {
-        if (error.response?.status === 401) {
-            // Handle unauthorized access
-            AsyncStorage.removeItem('token');
-            // You might want to redirect to login here
-        }
-        return Promise.reject(error);
-    }
-);
+    return data;
+};
 
 // Auth API
 export const authAPI = {
     login: async (email, password) => {
-        const response = await api.post('/auth/login', { email, password });
-        return response.data;
+        console.log('Making login API call for:', email);
+        try {
+            console.log('Sending request to:', `${API_URL}/auth/login`);
+            const res = await fetch(`${API_URL}/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password }),
+            });
+            console.log('Received response:', res.status, res.statusText);
+            const data = await handleResponse(res);
+            console.log('Login API response:', data);
+            return data;
+        } catch (err) {
+            console.error('Login API fetch error:', err);
+            console.error('Error details:', {
+                message: err.message,
+                status: err.status,
+                data: err.data
+            });
+            throw err;
+        }
     },
     register: async (userData) => {
-        const response = await api.post('/auth/register', userData);
-        return response.data;
+        const res = await fetch(`${API_URL}/auth/register`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(userData),
+        });
+        return handleResponse(res);
     },
     getProfile: async () => {
-        const response = await api.get('/auth/profile');
-        return response.data;
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/auth/profile`, {
+            headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+        return handleResponse(res);
     },
 };
 
 // Exam API
 export const examAPI = {
     getExams: async () => {
-        const response = await api.get('/exams');
-        return response.data;
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/exams`, { headers });
+        return handleResponse(res);
+    },
+    getAllBookedSessions: async () => {
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/session-bookings/all`, { headers });
+        return handleResponse(res);
+    },
+    assignExamToSession: async (bookingId, examId, hallId) => {
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/session-bookings/${bookingId}/assign-exam`, {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ examId, hallId }),
+        });
+        return handleResponse(res);
     },
     getExamById: async (id) => {
-        const response = await api.get(`/exams/${id}`);
-        return response.data;
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/exams/${id}`, { headers });
+        return handleResponse(res);
     },
     createExam: async (examData) => {
-        const response = await api.post('/exams', examData);
-        return response.data;
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/exams`, {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify(examData),
+        });
+        return handleResponse(res);
     },
     updateExam: async (id, examData) => {
-        const response = await api.put(`/exams/${id}`, examData);
-        return response.data;
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/exams/${id}`, {
+            method: 'PUT',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify(examData),
+        });
+        return handleResponse(res);
     },
     deleteExam: async (id) => {
-        const response = await api.delete(`/exams/${id}`);
-        return response.data;
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/exams/${id}`, {
+            method: 'DELETE',
+            headers,
+        });
+        return handleResponse(res);
+    },
+    getReports: async (filters) => {
+        const headers = await getAuthHeaders();
+        const queryParams = new URLSearchParams({
+            department: filters.department || '',
+            startDate: filters.startDate,
+            endDate: filters.endDate,
+        }).toString();
+        const res = await fetch(`${API_URL}/exams/reports/summary?${queryParams}`, {
+            headers,
+        });
+        return handleResponse(res);
     },
     bookHall: async (examId, hallId) => {
-        const response = await api.post(`/exams/${examId}/book-hall`, { hallId });
-        return response.data;
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/exams/${examId}/book-hall`, {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ hallId }),
+        });
+        return handleResponse(res);
     },
     cancelBooking: async (examId, hallId) => {
-        const response = await api.post(`/exams/${examId}/cancel-booking`, { hallId });
-        return response.data;
-    }
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/exams/${examId}/cancel-booking`, {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ hallId }),
+        });
+        return handleResponse(res);
+    },
+    assignStaff: async (examId) => {
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/exams/${examId}/assign-staff`, {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+        });
+        return handleResponse(res);
+    },
+    getMyHalls: async () => {
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/exams/my-halls`, { headers });
+        return handleResponse(res);
+    },
+    getDepartmentAssignments: async (department) => {
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/exams/department-assignments?department=${department}`, { headers });
+        return handleResponse(res);
+    },
+    allocateHalls: async (examId, halls) => {
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/exams/${examId}/allocate-halls`, {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ halls }),
+        });
+        return handleResponse(res);
+    },
+    getPreferredStaff: async (examId) => {
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/exams/${examId}/preferred-staff`, { headers });
+        return handleResponse(res);
+    },
 };
 
 // Hall API
 export const hallAPI = {
     getHalls: async () => {
-        const response = await api.get('/halls');
-        return response.data;
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/halls`, { headers });
+        return handleResponse(res);
     },
     getHallById: async (id) => {
-        const response = await api.get(`/halls/${id}`);
-        return response.data;
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/halls/${id}`, { headers });
+        return handleResponse(res);
     },
     createHall: async (hallData) => {
-        const response = await api.post('/halls', hallData);
-        return response.data;
+        const headers = await getAuthHeaders();
+        console.log('Create Hall Headers:', headers); // Debug log
+        console.log('Create Hall Data:', hallData); // Debug log
+        const res = await fetch(`${API_URL}/halls`, {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify(hallData),
+        });
+        return handleResponse(res);
     },
     updateHall: async (id, hallData) => {
-        const response = await api.put(`/halls/${id}`, hallData);
-        return response.data;
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/halls/${id}`, {
+            method: 'PUT',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify(hallData),
+        });
+        return handleResponse(res);
     },
     deleteHall: async (id) => {
-        const response = await api.delete(`/halls/${id}`);
-        return response.data;
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/halls/${id}`, {
+            method: 'DELETE',
+            headers,
+        });
+        return handleResponse(res);
     },
     getMyBookings: async () => {
-        const response = await api.get('/halls/my-bookings');
-        return response.data;
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/halls/my-bookings`, { headers });
+        return handleResponse(res);
     },
     bookHall: async (examId, hallId) => {
-        const response = await api.post(`/exams/${examId}/halls/${hallId}/book`);
-        return response.data;
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/exams/${examId}/halls/${hallId}/book`, {
+            method: 'POST',
+            headers,
+        });
+        return handleResponse(res);
     },
     cancelBooking: async (examId, hallId) => {
-        const response = await api.post(`/exams/${examId}/halls/${hallId}/cancel`);
-        return response.data;
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/exams/${examId}/halls/${hallId}/cancel`, {
+            method: 'POST',
+            headers,
+        });
+        return handleResponse(res);
     },
     unbookHall: async (examId, hallId) => {
-        const response = await api.post(`/halls/${hallId}/unbook`, { examId });
-        return response.data;
-    }
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/halls/${hallId}/unbook`, {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ examId }),
+        });
+        return handleResponse(res);
+    },
 };
 
-export default api; 
+export const userAPI = {
+    addUser: async (userData) => {
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/users/add`, {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify(userData),
+        });
+        return handleResponse(res);
+    },
+};
+
+export const staffAPI = {
+    submitPreferences: async (preferences) => {
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/preferences/staff-preferences`, {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ preferences }),
+        });
+        return handleResponse(res);
+    },
+    getAvailableSessions: async () => {
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/session-bookings/available`, { headers });
+        return handleResponse(res);
+    },
+    bookSession: async (date, timeSlot) => {
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/session-bookings/book`, {
+            method: 'POST',
+            headers: { ...headers, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ date, timeSlot }),
+        });
+        return handleResponse(res);
+    },
+    getMyBookedSessions: async () => {
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/session-bookings/my-bookings`, { headers });
+        return handleResponse(res);
+    },
+    cancelSession: async (bookingId) => {
+        const headers = await getAuthHeaders();
+        const res = await fetch(`${API_URL}/session-bookings/${bookingId}`, {
+            method: 'DELETE',
+            headers,
+        });
+        return handleResponse(res);
+    },
+}; 

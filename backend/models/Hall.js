@@ -1,49 +1,82 @@
 const mongoose = require('mongoose');
 
 const hallSchema = new mongoose.Schema({
-    name: {
+    hallNumber: {
         type: String,
         required: true,
-        trim: true
+        unique: true
     },
     capacity: {
         type: Number,
         required: true,
         min: 1
     },
-    location: {
+    department: {
         type: String,
-        required: true,
-        trim: true
+        required: true
     },
-    facilities: [{
-        type: String,
-        trim: true
-    }],
     status: {
         type: String,
-        enum: ['available', 'booked', 'maintenance'],
+        enum: ['available', 'allocated', 'maintenance'],
         default: 'available'
     },
-    bookedBy: {
+    currentExam: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Exam',
+        default: null
+    },
+    allocatedBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         default: null
     },
+    allocationDate: {
+        type: Date
+    },
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
     createdAt: {
         type: Date,
         default: Date.now
+    },
+    lastModifiedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    },
+    lastModifiedAt: {
+        type: Date
     }
 });
 
-// Add logging middleware
+// Add validation middleware
 hallSchema.pre('save', function(next) {
-    console.log('Saving hall:', { hallId: this._id, name: this.name });
+    if (this.isModified()) {
+        this.lastModifiedAt = new Date();
+    }
+    console.log('Saving hall:', { 
+        hallId: this._id, 
+        hallNumber: this.hallNumber,
+        status: this.status,
+        currentExam: this.currentExam
+    });
     next();
 });
 
-hallSchema.pre('remove', function(next) {
-    console.log('Removing hall:', { hallId: this._id, name: this.name });
+// Add cleanup middleware when hall is deleted
+hallSchema.pre('remove', async function(next) {
+    if (this.currentExam) {
+        try {
+            const Exam = mongoose.model('Exam');
+            await Exam.findByIdAndUpdate(this.currentExam, {
+                $pull: { halls: { hallNumber: this.hallNumber } }
+            });
+        } catch (error) {
+            console.error('Error cleaning up hall references:', error);
+        }
+    }
     next();
 });
 

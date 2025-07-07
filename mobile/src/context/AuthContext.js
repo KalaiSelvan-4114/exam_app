@@ -2,7 +2,9 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authAPI } from '../services/api';
 
-const AuthContext = createContext();
+console.log('AuthContext.js is loaded');
+
+const AuthContext = createContext(null);
 
 export const useAuth = () => {
     const context = useContext(AuthContext);
@@ -12,7 +14,7 @@ export const useAuth = () => {
     return context;
 };
 
-export const AuthProvider = ({ children }) => {
+export const AuthProvider = ({ children, onAuthFail }) => {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
 
@@ -33,6 +35,7 @@ export const AuthProvider = ({ children }) => {
             // Only remove token if there's an auth error
             await AsyncStorage.removeItem('token');
             setUser(null);
+            if (onAuthFail) onAuthFail(); // Call the callback if provided
         } finally {
             setLoading(false);
         }
@@ -40,21 +43,32 @@ export const AuthProvider = ({ children }) => {
 
     const login = async (email, password) => {
         try {
-            const { token, user } = await authAPI.login(email, password);
-            await AsyncStorage.setItem('token', token);
-            setUser(user);
-            return user;
+            console.log('Login attempt for:', email);
+            const response = await authAPI.login(email, password);
+            console.log('Login response:', response);
+            
+            if (!response || !response.token || !response.user) {
+                throw new Error('Invalid response from server');
+            }
+
+            await AsyncStorage.setItem('token', response.token);
+            setUser(response.user);
+            return response.user;
         } catch (error) {
+            console.error('Login failed:', error);
             throw error;
         }
     };
 
     const register = async (userData) => {
         try {
-            const { token, user } = await authAPI.register(userData);
-            await AsyncStorage.setItem('token', token);
-            setUser(user);
-            return user;
+            const response = await authAPI.register(userData);
+            if (!response || !response.token || !response.user) {
+                throw new Error('Invalid response from server');
+            }
+            await AsyncStorage.setItem('token', response.token);
+            setUser(response.user);
+            return response.user;
         } catch (error) {
             throw error;
         }

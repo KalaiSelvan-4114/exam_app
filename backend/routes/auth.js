@@ -3,7 +3,8 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const auth = require('../middleware/auth');
+console.log('User model loaded:', User);
+const { authenticateToken } = require('../middleware/auth');
 
 // Register
 router.post('/register', async (req, res) => {
@@ -18,6 +19,11 @@ router.post('/register', async (req, res) => {
             return res.status(400).json({ message: 'User already exists' });
         }
 
+        // Check if department is provided
+        if (!department || department.trim() === '') {
+            return res.status(400).json({ message: 'Department is required.' });
+        }
+
         // Create user object
         const userData = {
             name,
@@ -28,13 +34,7 @@ router.post('/register', async (req, res) => {
         };
 
         // Add department only for faculty
-        if (role === 'faculty') {
-            if (!department) {
-                console.log('Registration failed: Department required for faculty');
-                return res.status(400).json({ message: 'Department is required for faculty members' });
-            }
-            userData.department = department;
-        }
+        userData.department = department;
 
         // Create user
         user = new User(userData);
@@ -44,7 +44,8 @@ router.post('/register', async (req, res) => {
         // Create token payload
         const tokenPayload = {
             userId: user._id,
-            role: user.role
+            role: user.role,
+            department: user.department
         };
         console.log('Creating token with payload:', tokenPayload);
 
@@ -82,6 +83,8 @@ router.post('/login', async (req, res) => {
         }
 
         // Validate password
+        console.log('User instance:', user);
+        console.log('comparePassword:', user.comparePassword);
         const isMatch = await user.comparePassword(password);
         if (!isMatch) {
             console.log('Login failed: Invalid password');
@@ -91,7 +94,8 @@ router.post('/login', async (req, res) => {
         // Create token payload
         const tokenPayload = {
             userId: user._id,
-            role: user.role
+            role: user.role,
+            department: user.department
         };
         console.log('Creating token with payload:', tokenPayload);
 
@@ -117,7 +121,7 @@ router.post('/login', async (req, res) => {
 });
 
 // Get profile
-router.get('/profile', auth, async (req, res) => {
+router.get('/profile', authenticateToken, async (req, res) => {
     console.log('Profile request received:', { userId: req.user.userId });
     try {
         const user = await User.findById(req.user.userId).select('-password');

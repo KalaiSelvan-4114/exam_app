@@ -20,17 +20,27 @@ const userSchema = new mongoose.Schema({
     },
     role: {
         type: String,
-        enum: ['coordinator', 'faculty'],
+        enum: ['exam_coordinator', 'department_coordinator', 'staff'],
         required: true
     },
     department: {
         type: String,
-        trim: true
+        required: true
+    },
+    isActive: {
+        type: Boolean,
+        default: true
     },
     phone: {
         type: String,
         trim: true
     },
+    preferences: [
+        {
+            date: { type: Date, required: true },
+            timeSlot: { type: String, enum: ['AN', 'FN'], required: true }
+        }
+    ],
     createdAt: {
         type: Date,
         default: Date.now
@@ -54,11 +64,6 @@ userSchema.pre('save', async function(next) {
         } catch (error) {
             return next(error);
         }
-    }
-
-    // Validate department for faculty
-    if (this.role === 'faculty' && !this.department) {
-        return next(new Error('Department is required for faculty members'));
     }
 
     next();

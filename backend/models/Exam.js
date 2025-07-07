@@ -1,10 +1,41 @@
 const mongoose = require('mongoose');
 
+const hallSchema = new mongoose.Schema({
+    hallNumber: {
+        type: String,
+        required: true
+    },
+    capacity: {
+        type: Number,
+        required: true,
+        min: 1
+    },
+    assignedStaff: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    },
+    status: {
+        type: String,
+        enum: ['available', 'allocated', 'staff_assigned'],
+        default: 'available'
+    },
+    allocatedAt: {
+        type: Date
+    },
+    allocatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }
+});
+
 const examSchema = new mongoose.Schema({
     title: {
         type: String,
-        required: true,
-        trim: true
+        required: true
+    },
+    courseCode: {
+        type: String,
+        required: true
     },
     department: {
         type: String,
@@ -14,60 +45,96 @@ const examSchema = new mongoose.Schema({
         type: Date,
         required: true
     },
-    startTime: {
-        type: String,
-        required: true
-    },
-    endTime: {
-        type: String,
-        required: true
-    },
-    duration: {
-        type: Number, // in minutes
-        required: true
-    },
-    coordinator: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
-    },
-    halls: [{
-        hallNumber: {
-            type: String,
-            required: true
-        },
-        capacity: {
-            type: Number,
-            required: true
-        },
-        bookedBy: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'User'
-        },
-        status: {
-            type: String,
-            enum: ['available', 'booked'],
-            default: 'available'
-        }
-    }],
-    status: {
-        type: String,
-        enum: ['scheduled', 'in-progress', 'completed', 'cancelled'],
-        default: 'scheduled'
-    },
-    numberOfHalls: {
-        type: Number,
-        required: true
-    },
     timeSlot: {
         type: String,
         enum: ['AN', 'FN'],
         required: true
     },
-    createdAt: {
-        type: Date,
-        default: Date.now
+    totalStudents: {
+        type: Number,
+        required: true,
+        min: 1
+    },
+    halls: [hallSchema],
+    status: {
+        type: String,
+        enum: [
+            'draft',
+            'scheduled',
+            'halls_pending',
+            'halls_allocated',
+            'staff_preferences_pending',
+            'staff_preferences_submitted',
+            'staff_assigned',
+            'published',
+            'completed',
+            'cancelled'
+        ],
+        default: 'draft'
+    },
+    totalCapacity: {
+        type: Number,
+        default: 0
+    },
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
+    hallsAllocatedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+        },
+    hallsAllocationDate: {
+        type: Date
+        },
+    staffAssignedBy: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User'
+        },
+    staffAssignmentDate: {
+        type: Date
+    },
+    publishedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    },
+    publishedDate: {
+        type: Date
+    },
+    lastModifiedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    },
+    lastModifiedAt: {
+        type: Date
     }
+}, {
+    timestamps: true
 });
 
-module.exports = mongoose.model('Exam', examSchema); 
+// Add compound index for unique department, courseCode, and timeSlot combination
+examSchema.index({ department: 1, courseCode: 1, timeSlot: 1 }, { unique: true });
+
+// Calculate total capacity when halls are modified
+examSchema.pre('save', function(next) {
+    if (this.isModified('halls')) {
+        this.totalCapacity = this.halls.reduce((total, hall) => total + hall.capacity, 0);
+    }
+    if (this.isModified()) {
+        this.lastModifiedAt = new Date();
+    }
+    next();
+});
+
+// Validate total capacity against total students
+examSchema.pre('save', function(next) {
+    if (this.status === 'halls_allocated' && this.totalCapacity < this.totalStudents) {
+        next(new Error('Total hall capacity must be greater than or equal to total students'));
+    }
+    next();
+});
+
+const Exam = mongoose.model('Exam', examSchema);
+
+module.exports = Exam; 

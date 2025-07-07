@@ -5,6 +5,10 @@ const dotenv = require('dotenv');
 const authRoutes = require('./routes/auth');
 const examRoutes = require('./routes/exams');
 const hallRoutes = require('./routes/halls');
+const userRoutes = require('./routes/users');
+const preferencesRoutes = require('./routes/preferences');
+const sessionBookingRoutes = require('./routes/sessionBookings');
+//const staffRoutes = require('./routes/staff');
 
 // Load environment variables
 dotenv.config();
@@ -27,6 +31,10 @@ console.log('Setting up routes...');
 app.use('/api/auth', authRoutes);
 app.use('/api/exams', examRoutes);
 app.use('/api/halls', hallRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/preferences', preferencesRoutes);
+app.use('/api/session-bookings', sessionBookingRoutes);
+//app.use('/api/staff', staffRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
